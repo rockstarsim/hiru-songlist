@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { checkAdminCode, setAdminSession } from "@/lib/auth";
+import { checkAdminCode, signAdminToken } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
@@ -14,6 +14,13 @@ export async function POST(request: Request) {
     );
   }
 
-  await setAdminSession();
-  return NextResponse.json({ ok: true });
+  const response = NextResponse.json({ ok: true });
+  response.cookies.set("hiru_admin", signAdminToken(), {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: 60 * 60 * 24 * 7,
+  });
+  return response;
 }

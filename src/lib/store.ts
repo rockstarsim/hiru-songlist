@@ -1,13 +1,16 @@
 import { promises as fs } from "fs";
 import path from "path";
 import { neon } from "@neondatabase/serverless";
-import { put, list } from "@vercel/blob";
+import { head, put } from "@vercel/blob";
 import { nanoid } from "nanoid";
 import type { Database, Genre, Song, SongRequest, SortKey } from "./types";
+import seedData from "./seed-data.json";
 
 const DATA_DIR = path.join(process.cwd(), "data");
 const DATA_FILE = path.join(DATA_DIR, "db.json");
-const BLOB_PATH = "hiru-songlist/db.json";
+const SONGS_BLOB = "hiru-songlist/songs.json";
+const REQUESTS_BLOB = "hiru-songlist/requests.json";
+const LEGACY_BLOB = "hiru-songlist/db.json";
 
 const EMPTY_DB: Database = { songs: [], requests: [] };
 
@@ -26,6 +29,10 @@ function usePostgres() {
 
 function useBlob() {
   return Boolean(process.env.BLOB_READ_WRITE_TOKEN);
+}
+
+function seedSongs(): Song[] {
+  return structuredClone(seedData.songs) as Song[];
 }
 
 async function ensureSchema() {
@@ -58,41 +65,54 @@ async function readFileDb(): Promise<Database> {
     const raw = await fs.readFile(DATA_FILE, "utf8");
     const parsed = JSON.parse(raw) as Database;
     return {
+      songs: parsed.songs?.length ? parsed.songs : seedSongs(),
+      requests: parsed.requests ?? [],
+    };
+  } catch {
+    return { songs: seedSongs(), requests: [] };
+  }
+}
+
+function resolveWritablePath() {
+  if (process.env.VERCEL) {
+    return path.join("/tmp", "hiru-songlist-db.json");
+  }
+  return DATA_FILE;
+}
+
+async function writeFileDb(db: Database) {
+  const target = resolveWritablePath();
+  await fs.mkdir(path.dirname(target), { recursive: true });
+  await fs.writeFile(target, JSON.stringify(db, null, 2), "utf8");
+}
+
+async function readFileDbFromWritable(): Promise<Database | null> {
+  if (!process.env.VERCEL) return null;
+  try {
+    const raw = await fs.readFile(resolveWritablePath(), "utf8");
+    const parsed = JSON.parse(raw) as Database;
+    return {
       songs: parsed.songs ?? [],
       requests: parsed.requests ?? [],
     };
   } catch {
-    return structuredClone(EMPTY_DB);
+    return null;
   }
 }
 
-async function writeFileDb(db: Database) {
-  await fs.mkdir(DATA_DIR, { recursive: true });
-  await fs.writeFile(DATA_FILE, JSON.stringify(db, null, 2), "utf8");
-}
-
-async function readBlobDb(): Promise<Database> {
-  const { blobs } = await list({ prefix: BLOB_PATH });
-  const blob = blobs.find((b) => b.pathname === BLOB_PATH);
-  if (!blob) {
-    const seed = await readFileDb();
-    if (seed.songs.length > 0 || seed.requests.length > 0) {
-      await writeBlobDb(seed);
-      return seed;
-    }
-    return structuredClone(EMPTY_DB);
+async function readBlobJson<T>(pathname: string): Promise<T | null> {
+  try {
+    const meta = await head(pathname);
+    const res = await fetch(meta.url, { cache: "no-store" });
+    if (!res.ok) return null;
+    return (await res.json()) as T;
+  } catch {
+    return null;
   }
-  const res = await fetch(blob.url, { cache: "no-store" });
-  if (!res.ok) return structuredClone(EMPTY_DB);
-  const parsed = (await res.json()) as Database;
-  return {
-    songs: parsed.songs ?? [],
-    requests: parsed.requests ?? [],
-  };
 }
 
-async function writeBlobDb(db: Database) {
-  await put(BLOB_PATH, JSON.stringify(db, null, 2), {
+async function writeBlobJson(pathname: string, value: unknown) {
+  await put(pathname, JSON.stringify(value, null, 2), {
     access: "public",
     addRandomSuffix: false,
     allowOverwrite: true,
@@ -100,23 +120,96 @@ async function writeBlobDb(db: Database) {
   });
 }
 
+async function readBlobDb(): Promise<Database> {
+  const [songsDirect, requestsDirect, legacy] = await Promise.all([
+    readBlobJson<Song[]>(SONGS_BLOB),
+    readBlobJson<SongRequest[]>(REQUESTS_BLOB),
+    readBlobJson<Database>(LEGACY_BLOB),
+  ]);
+
+  let songs = songsDirect;
+  let requests = requestsDirect;
+  let shouldPersistSongs = false;
+  let shouldPersistRequests = false;
+
+  // Migrate once from legacy combined file
+  if ((!songs || songs.length === 0) && legacy?.songs?.length) {
+    songs = legacy.songs;
+    shouldPersistSongs = true;
+  }
+  if ((!requests || requests.length === 0) && legacy?.requests?.length) {
+    requests = legacy.requests;
+    shouldPersistRequests = true;
+  }
+
+  if (!songs || songs.length === 0) {
+    songs = seedSongs();
+    shouldPersistSongs = true;
+  }
+  if (!requests) {
+    requests = [];
+    shouldPersistRequests = songsDirect === null && requestsDirect === null;
+  }
+
+  if (shouldPersistSongs) {
+    await writeBlobJson(SONGS_BLOB, songs);
+  }
+  if (shouldPersistRequests || requestsDirect === null) {
+    await writeBlobJson(REQUESTS_BLOB, requests);
+  }
+
+  return { songs, requests };
+}
+
 async function readJsonDb(): Promise<Database> {
   if (useBlob()) return readBlobDb();
+  if (process.env.VERCEL) {
+    const writable = await readFileDbFromWritable();
+    if (writable) {
+      return {
+        songs: writable.songs.length ? writable.songs : seedSongs(),
+        requests: writable.requests,
+      };
+    }
+  }
   return readFileDb();
 }
 
-async function writeJsonDb(db: Database) {
+async function writeSongs(songs: Song[]) {
   if (useBlob()) {
-    await writeBlobDb(db);
+    await writeBlobJson(SONGS_BLOB, songs);
     return;
   }
+  const db = await readJsonDb();
+  db.songs = songs;
   await writeFileDb(db);
 }
 
+async function writeRequests(requests: SongRequest[]) {
+  if (useBlob()) {
+    await writeBlobJson(REQUESTS_BLOB, requests);
+    return;
+  }
+  const db = await readJsonDb();
+  db.requests = requests;
+  await writeFileDb(db);
+}
+
+function normalizeSong(song: Song): Song {
+  return {
+    ...song,
+    albumCover: song.albumCover ?? null,
+    youtubeUrl: song.youtubeUrl ?? null,
+    melonUrl: song.melonUrl ?? null,
+  };
+}
+
 function sortSongs(songs: Song[], sortBy: SortKey): Song[] {
-  return [...songs].sort((a, b) =>
-    a[sortBy].localeCompare(b[sortBy], "ko", { sensitivity: "base" }),
-  );
+  return [...songs]
+    .map(normalizeSong)
+    .sort((a, b) =>
+      a[sortBy].localeCompare(b[sortBy], "ko", { sensitivity: "base" }),
+    );
 }
 
 export async function listSongs(sortBy: SortKey = "title"): Promise<Song[]> {
@@ -140,6 +233,8 @@ export async function createSong(input: {
   artist: string;
   genre: Genre;
   albumCover: string | null;
+  youtubeUrl?: string | null;
+  melonUrl?: string | null;
 }): Promise<Song> {
   const song: Song = {
     id: nanoid(),
@@ -147,6 +242,8 @@ export async function createSong(input: {
     artist: input.artist.trim(),
     genre: input.genre,
     albumCover: input.albumCover,
+    youtubeUrl: input.youtubeUrl?.trim() || null,
+    melonUrl: input.melonUrl?.trim() || null,
     createdAt: new Date().toISOString(),
   };
 
@@ -162,7 +259,7 @@ export async function createSong(input: {
 
   const db = await readJsonDb();
   db.songs.push(song);
-  await writeJsonDb(db);
+  await writeSongs(db.songs);
   return song;
 }
 
@@ -173,6 +270,8 @@ export async function updateSong(
     artist: string;
     genre: Genre;
     albumCover: string | null;
+    youtubeUrl?: string | null;
+    melonUrl?: string | null;
   },
 ): Promise<Song | null> {
   if (usePostgres()) {
@@ -188,20 +287,35 @@ export async function updateSong(
       RETURNING id, title, artist, genre, album_cover AS "albumCover",
                 created_at AS "createdAt"
     `;
-    return (rows[0] as Song) ?? null;
+    const row = rows[0] as Song | undefined;
+    return row
+      ? normalizeSong({
+          ...row,
+          youtubeUrl: input.youtubeUrl?.trim() || null,
+          melonUrl: input.melonUrl?.trim() || null,
+        })
+      : null;
   }
 
   const db = await readJsonDb();
   const idx = db.songs.findIndex((s) => s.id === id);
   if (idx < 0) return null;
-  db.songs[idx] = {
+  db.songs[idx] = normalizeSong({
     ...db.songs[idx],
     title: input.title.trim(),
     artist: input.artist.trim(),
     genre: input.genre,
     albumCover: input.albumCover,
-  };
-  await writeJsonDb(db);
+    youtubeUrl:
+      input.youtubeUrl !== undefined
+        ? input.youtubeUrl?.trim() || null
+        : db.songs[idx].youtubeUrl ?? null,
+    melonUrl:
+      input.melonUrl !== undefined
+        ? input.melonUrl?.trim() || null
+        : db.songs[idx].melonUrl ?? null,
+  });
+  await writeSongs(db.songs);
   return db.songs[idx];
 }
 
@@ -218,8 +332,7 @@ export async function deleteSong(id: string): Promise<boolean> {
   const db = await readJsonDb();
   const next = db.songs.filter((s) => s.id !== id);
   if (next.length === db.songs.length) return false;
-  db.songs = next;
-  await writeJsonDb(db);
+  await writeSongs(next);
   return true;
 }
 
@@ -284,9 +397,20 @@ export async function createRequest(input: {
     return request;
   }
 
+  // Read requests file only when possible to avoid song/request write races
+  if (useBlob()) {
+    const existing =
+      (await readBlobJson<SongRequest[]>(REQUESTS_BLOB)) ??
+      (await readBlobJson<Database>(LEGACY_BLOB))?.requests ??
+      [];
+    const next = [...existing, request];
+    await writeBlobJson(REQUESTS_BLOB, next);
+    return request;
+  }
+
   const db = await readJsonDb();
   db.requests.push(request);
-  await writeJsonDb(db);
+  await writeRequests(db.requests);
   return request;
 }
 
@@ -307,12 +431,12 @@ export async function updateRequestStatus(
     return (rows[0] as SongRequest) ?? null;
   }
 
-  const db = await readJsonDb();
-  const idx = db.requests.findIndex((r) => r.id === id);
+  const requests = await listRequests();
+  const idx = requests.findIndex((r) => r.id === id);
   if (idx < 0) return null;
-  db.requests[idx] = { ...db.requests[idx], status };
-  await writeJsonDb(db);
-  return db.requests[idx];
+  requests[idx] = { ...requests[idx], status };
+  await writeRequests(requests);
+  return requests[idx];
 }
 
 export async function deleteRequest(id: string): Promise<boolean> {
@@ -325,10 +449,9 @@ export async function deleteRequest(id: string): Promise<boolean> {
     return rows.length > 0;
   }
 
-  const db = await readJsonDb();
-  const next = db.requests.filter((r) => r.id !== id);
-  if (next.length === db.requests.length) return false;
-  db.requests = next;
-  await writeJsonDb(db);
+  const requests = await listRequests();
+  const next = requests.filter((r) => r.id !== id);
+  if (next.length === requests.length) return false;
+  await writeRequests(next);
   return true;
 }

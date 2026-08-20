@@ -29,7 +29,14 @@ export function RequestForm() {
           message: message || null,
         }),
       });
-      const data = await res.json();
+
+      let data: { error?: string } = {};
+      try {
+        data = (await res.json()) as { error?: string };
+      } catch {
+        // non-JSON error body
+      }
+
       if (!res.ok) {
         setStatus("error");
         setError(data.error || "신청에 실패했습니다.");

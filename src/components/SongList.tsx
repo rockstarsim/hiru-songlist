@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import type { Genre, Song, SortKey } from "@/lib/types";
 import { GENRES } from "@/lib/types";
+import { SongPreview } from "./SongPreview";
 
 type Props = {
   initialSongs: Song[];
@@ -16,6 +17,7 @@ export function SongList({ initialSongs, isAdmin = false, onChanged }: Props) {
   const [genreFilter, setGenreFilter] = useState<Genre | "전체">("전체");
   const [query, setQuery] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Song | null>(null);
 
   async function resort(nextSort: SortKey) {
     setSortBy(nextSort);
@@ -94,30 +96,39 @@ export function SongList({ initialSongs, isAdmin = false, onChanged }: Props) {
         </label>
       </div>
 
-      <p className="count-line">{visible.length}곡</p>
+      <p className="count-line">{visible.length}곡 · 곡을 누르면 미리보기</p>
 
       <ul className="song-grid">
         {visible.map((song) => (
           <li key={song.id} className="song-item">
-            <div className="cover-wrap">
-              {song.albumCover ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={song.albumCover}
-                  alt={`${song.title} 앨범 커버`}
-                  className="cover"
-                />
-              ) : (
-                <div className="cover placeholder" aria-hidden>
-                  ♪
-                </div>
-              )}
-            </div>
-            <div className="song-meta">
-              <h3>{song.title}</h3>
-              <p className="artist">{song.artist}</p>
-              <span className="genre-tag">{song.genre}</span>
-            </div>
+            <button
+              type="button"
+              className="song-hit"
+              onClick={() => setSelected(song)}
+            >
+              <div className="cover-wrap">
+                {song.albumCover ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={song.albumCover}
+                    alt={`${song.title} 앨범 커버`}
+                    className="cover"
+                  />
+                ) : (
+                  <div className="cover placeholder" aria-hidden>
+                    ♪
+                  </div>
+                )}
+                <span className="play-cue" aria-hidden>
+                  ▶
+                </span>
+              </div>
+              <div className="song-meta">
+                <h3>{song.title}</h3>
+                <p className="artist">{song.artist}</p>
+                <span className="genre-tag">{song.genre}</span>
+              </div>
+            </button>
             {isAdmin && (
               <div className="song-actions">
                 <a className="text-btn" href={`/admin?edit=${song.id}`}>
@@ -139,6 +150,10 @@ export function SongList({ initialSongs, isAdmin = false, onChanged }: Props) {
 
       {visible.length === 0 && (
         <p className="empty">아직 등록된 곡이 없습니다.</p>
+      )}
+
+      {selected && (
+        <SongPreview song={selected} onClose={() => setSelected(null)} />
       )}
     </section>
   );

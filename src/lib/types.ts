@@ -10,6 +10,8 @@ export type Song = {
   artist: string;
   genre: Genre;
   albumCover: string | null;
+  youtubeUrl: string | null;
+  melonUrl: string | null;
   createdAt: string;
 };
 

@@ -1,18 +1,18 @@
 import type { Metadata } from "next";
-import { Black_Han_Sans, Noto_Sans_KR } from "next/font/google";
+import { Gaegu, Jua } from "next/font/google";
 import { headers } from "next/headers";
 import { SiteHeader } from "@/components/SiteHeader";
 import "./globals.css";
 
-const display = Black_Han_Sans({
+const display = Jua({
   weight: "400",
   subsets: ["latin"],
   variable: "--font-display",
 });
 
-const body = Noto_Sans_KR({
+const body = Gaegu({
+  weight: ["400", "700"],
   subsets: ["latin"],
-  weight: ["400", "500", "700"],
   variable: "--font-body",
 });
 

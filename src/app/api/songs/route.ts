@@ -29,6 +29,8 @@ export async function POST(request: Request) {
     artist?: string;
     genre?: string;
     albumCover?: string | null;
+    youtubeUrl?: string | null;
+    melonUrl?: string | null;
   };
 
   const title = body.title?.trim();
@@ -47,6 +49,13 @@ export async function POST(request: Request) {
     albumCover = await fetchAlbumCover(title, artist);
   }
 
-  const song = await createSong({ title, artist, genre, albumCover });
+  const song = await createSong({
+    title,
+    artist,
+    genre,
+    albumCover,
+    youtubeUrl: body.youtubeUrl ?? null,
+    melonUrl: body.melonUrl ?? null,
+  });
   return NextResponse.json({ song }, { status: 201 });
 }

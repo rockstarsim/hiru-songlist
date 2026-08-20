@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { listSongs } from "@/lib/store";
 import { SongList } from "@/components/SongList";
 
@@ -8,13 +9,25 @@ export default async function HomePage() {
 
   return (
     <>
-      <section className="hero">
-        <h1>HIRU</h1>
-        <p>
-          스트리머 하루의 노래 목록입니다. 제목 · 아티스트 · 장르로 정렬하고,
-          원하는 곡은 노래 신청 탭에서 남겨 주세요.
-        </p>
+      <section className="home-hero" aria-label="히루 소개">
+        <div className="home-hero-visual">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/hiru.png" alt="히루(Hiru) 아바타" />
+        </div>
+        <div className="home-hero-copy">
+          <p className="brand-hero">HIRU</p>
+          <p>히루의 노래책</p>
+          <div className="hero-actions">
+            <Link className="primary-btn" href="/request">
+              노래 신청하기
+            </Link>
+          </div>
+        </div>
       </section>
+
+      <h2 className="section-title">
+        노래 목록 <span>♔</span>
+      </h2>
       <SongList initialSongs={songs} />
     </>
   );

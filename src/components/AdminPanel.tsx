@@ -7,10 +7,15 @@ import { SongList } from "./SongList";
 
 type Props = {
   initialSongs: Song[];
+  initialRequests?: SongRequest[];
   initiallyAuthed: boolean;
 };
 
-export function AdminPanel({ initialSongs, initiallyAuthed }: Props) {
+export function AdminPanel({
+  initialSongs,
+  initialRequests = [],
+  initiallyAuthed,
+}: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const editId = searchParams.get("edit");
@@ -19,23 +24,31 @@ export function AdminPanel({ initialSongs, initiallyAuthed }: Props) {
   const [code, setCode] = useState("");
   const [loginError, setLoginError] = useState("");
   const [songs, setSongs] = useState(initialSongs);
-  const [requests, setRequests] = useState<SongRequest[]>([]);
+  const [requests, setRequests] = useState<SongRequest[]>(initialRequests);
+  const [requestsError, setRequestsError] = useState("");
   const [title, setTitle] = useState("");
   const [artist, setArtist] = useState("");
   const [genre, setGenre] = useState<Genre>("K-POP");
+  const [youtubeUrl, setYoutubeUrl] = useState("");
+  const [melonUrl, setMelonUrl] = useState("");
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
   const [formOk, setFormOk] = useState("");
 
   async function refreshSongs() {
-    const res = await fetch("/api/songs?sort=title");
+    const res = await fetch("/api/songs?sort=title", { credentials: "include" });
     const data = await res.json();
     setSongs(data.songs);
   }
 
   async function refreshRequests() {
-    const res = await fetch("/api/requests");
-    if (!res.ok) return;
+    setRequestsError("");
+    const res = await fetch("/api/requests", { credentials: "include" });
+    if (!res.ok) {
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      setRequestsError(data.error || "신청 목록을 불러오지 못했습니다.");
+      return;
+    }
     const data = await res.json();
     setRequests(data.requests);
   }
@@ -52,6 +65,8 @@ export function AdminPanel({ initialSongs, initiallyAuthed }: Props) {
     setTitle(song.title);
     setArtist(song.artist);
     setGenre(song.genre);
+    setYoutubeUrl(song.youtubeUrl ?? "");
+    setMelonUrl(song.melonUrl ?? "");
   }, [editId, songs, authed]);
 
   async function handleLogin(e: FormEvent) {
@@ -69,6 +84,7 @@ export function AdminPanel({ initialSongs, initiallyAuthed }: Props) {
     }
     setAuthed(true);
     setCode("");
+    await refreshRequests();
     router.refresh();
   }
 
@@ -85,7 +101,14 @@ export function AdminPanel({ initialSongs, initiallyAuthed }: Props) {
     setFormOk("");
 
     try {
-      const payload = { title, artist, genre, refreshCover: true };
+      const payload = {
+        title,
+        artist,
+        genre,
+        youtubeUrl: youtubeUrl.trim() || null,
+        melonUrl: melonUrl.trim() || null,
+        refreshCover: true,
+      };
       const res = await fetch(editId ? `/api/songs/${editId}` : "/api/songs", {
         method: editId ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
@@ -100,6 +123,8 @@ export function AdminPanel({ initialSongs, initiallyAuthed }: Props) {
       setTitle("");
       setArtist("");
       setGenre("K-POP");
+      setYoutubeUrl("");
+      setMelonUrl("");
       await refreshSongs();
       if (editId) router.replace("/admin");
     } finally {
@@ -179,8 +204,25 @@ export function AdminPanel({ initialSongs, initiallyAuthed }: Props) {
             ))}
           </select>
         </label>
+        <label className="field">
+          <span>YouTube 링크 (선택)</span>
+          <input
+            value={youtubeUrl}
+            onChange={(e) => setYoutubeUrl(e.target.value)}
+            placeholder="https://www.youtube.com/watch?v=..."
+          />
+        </label>
+        <label className="field">
+          <span>Melon 링크 (선택)</span>
+          <input
+            value={melonUrl}
+            onChange={(e) => setMelonUrl(e.target.value)}
+            placeholder="https://www.melon.com/song/detail.htm?songId=..."
+          />
+        </label>
         <p className="muted small">
-          저장 시 iTunes에서 앨범 커버를 자동으로 가져옵니다.
+          저장 시 iTunes에서 앨범 커버를 자동으로 가져옵니다. 링크를 비워 두면
+          검색 결과로 연결됩니다.
         </p>
         <div className="btn-row">
           <button className="primary-btn" type="submit" disabled={saving}>
@@ -194,6 +236,8 @@ export function AdminPanel({ initialSongs, initiallyAuthed }: Props) {
                 setTitle("");
                 setArtist("");
                 setGenre("K-POP");
+                setYoutubeUrl("");
+                setMelonUrl("");
                 router.replace("/admin");
               }}
             >
@@ -206,8 +250,20 @@ export function AdminPanel({ initialSongs, initiallyAuthed }: Props) {
       </form>
 
       <section className="form-card">
-        <h3>노래 신청 ({requests.filter((r) => r.status === "pending").length})</h3>
-        {requests.length === 0 && <p className="muted">신청이 없습니다.</p>}
+        <div className="admin-top">
+          <h3>노래 신청 ({requests.filter((r) => r.status === "pending").length})</h3>
+          <button
+            type="button"
+            className="ghost-btn small"
+            onClick={() => void refreshRequests()}
+          >
+            새로고침
+          </button>
+        </div>
+        {requestsError && <p className="error-msg">{requestsError}</p>}
+        {requests.length === 0 && !requestsError && (
+          <p className="muted">신청이 없습니다.</p>
+        )}
         <ul className="request-list">
           {requests.map((req) => (
             <li key={req.id} className="request-item">

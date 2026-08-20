@@ -33,6 +33,8 @@ export async function PUT(request: Request, { params }: Params) {
     artist?: string;
     genre?: string;
     albumCover?: string | null;
+    youtubeUrl?: string | null;
+    melonUrl?: string | null;
     refreshCover?: boolean;
   };
 
@@ -51,7 +53,15 @@ export async function PUT(request: Request, { params }: Params) {
     albumCover = await fetchAlbumCover(title, artist);
   }
 
-  const song = await updateSong(id, { title, artist, genre, albumCover });
+  const song = await updateSong(id, {
+    title,
+    artist,
+    genre,
+    albumCover,
+    youtubeUrl:
+      body.youtubeUrl !== undefined ? body.youtubeUrl : existing.youtubeUrl,
+    melonUrl: body.melonUrl !== undefined ? body.melonUrl : existing.melonUrl,
+  });
   return NextResponse.json({ song });
 }
 

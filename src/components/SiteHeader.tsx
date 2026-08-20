@@ -1,9 +1,11 @@
 import Link from "next/link";
 
+const SOOP_URL = "https://www.sooplive.com/station/ah2ruu";
+
 const links = [
   { href: "/", label: "노래 목록" },
   { href: "/request", label: "노래 신청" },
-  { href: "/admin", label: "관리자" },
+  { href: "/admin", label: "♚ 관리자" },
 ];
 
 export function SiteHeader({ pathname }: { pathname: string }) {
@@ -13,6 +15,9 @@ export function SiteHeader({ pathname }: { pathname: string }) {
         <Link href="/" className="brand">
           <span className="brand-mark">HIRU</span>
           <span className="brand-sub">Songlist</span>
+          <span className="brand-chess" aria-hidden>
+            ♔
+          </span>
         </Link>
         <nav className="nav" aria-label="주요 메뉴">
           {links.map((link) => {
@@ -30,6 +35,14 @@ export function SiteHeader({ pathname }: { pathname: string }) {
               </Link>
             );
           })}
+          <a
+            className="nav-link soop"
+            href={SOOP_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            SOOP
+          </a>
         </nav>
       </div>
     </header>

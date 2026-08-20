@@ -1,9 +1,15 @@
 import { NextResponse } from "next/server";
-import { clearAdminSession } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
 export async function POST() {
-  await clearAdminSession();
-  return NextResponse.json({ ok: true });
+  const response = NextResponse.json({ ok: true });
+  response.cookies.set("hiru_admin", "", {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: 0,
+  });
+  return response;
 }

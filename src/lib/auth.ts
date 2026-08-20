@@ -11,14 +11,14 @@ function getSecret() {
   return process.env.ADMIN_SECRET || `hiru-admin-${getAdminCode()}`;
 }
 
-function signToken(): string {
+export function signAdminToken(): string {
   const payload = "admin";
   const sig = createHmac("sha256", getSecret()).update(payload).digest("hex");
   return `${payload}.${sig}`;
 }
 
 function verifyToken(token: string): boolean {
-  const expected = signToken();
+  const expected = signAdminToken();
   try {
     const a = Buffer.from(token);
     const b = Buffer.from(expected);
@@ -50,7 +50,7 @@ export async function isAdminAuthenticated(): Promise<boolean> {
 
 export async function setAdminSession() {
   const jar = await cookies();
-  jar.set(COOKIE_NAME, signToken(), {
+  jar.set(COOKIE_NAME, signAdminToken(), {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
