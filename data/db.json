@@ -1,0 +1,45 @@
+{
+  "songs": [
+    {
+      "id": "seed-001",
+      "title": "밤양갱",
+      "artist": "비비",
+      "genre": "K-POP",
+      "albumCover": "https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/ba/31/d6/ba31d644-bb34-1e4c-5600-c403b83159ef/cover_KM0019491_1.png/600x600bb.jpg",
+      "createdAt": "2026-01-01T00:00:00.000Z"
+    },
+    {
+      "id": "seed-002",
+      "title": "Supernova",
+      "artist": "aespa",
+      "genre": "K-POP",
+      "albumCover": "https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/50/7e/e0/507ee09f-ccfd-1e3c-af90-ca5e92b1221b/00888735949869_Cover.jpg/600x600bb.jpg",
+      "createdAt": "2026-01-02T00:00:00.000Z"
+    },
+    {
+      "id": "seed-003",
+      "title": "아이와 나의 바다",
+      "artist": "IU",
+      "genre": "발라드",
+      "albumCover": "https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/35/9f/83/359f83b3-1423-3153-1641-98e948b7fc65/cover_-_EDAM_5_LILAC.jpg/600x600bb.jpg",
+      "createdAt": "2026-01-03T00:00:00.000Z"
+    },
+    {
+      "id": "seed-004",
+      "title": "Pretender",
+      "artist": "Official髭男dism",
+      "genre": "J-POP",
+      "albumCover": "https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/1f/b6/36/1fb6364f-77fc-7653-3750-811631832ee9/PCCA_04785.jpg/600x600bb.jpg",
+      "createdAt": "2026-01-04T00:00:00.000Z"
+    },
+    {
+      "id": "seed-005",
+      "title": "Cruel Summer",
+      "artist": "Taylor Swift",
+      "genre": "POP",
+      "albumCover": "https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/49/3d/ab/493dab54-f920-9043-6181-80993b8116c9/19UMGIM53909.rgb.jpg/600x600bb.jpg",
+      "createdAt": "2026-01-05T00:00:00.000Z"
+    }
+  ],
+  "requests": []
+}
